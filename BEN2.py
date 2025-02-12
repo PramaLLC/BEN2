@@ -757,14 +757,37 @@ class MCLM(nn.Module):
         self.p_poses = []
         self.g_pos = None 
         b, c, h, w = l.size()
+        h=h.item()
+        w=w.item()
         # 4,c,h,w -> 1,c,2h,2w
         concated_locs = rearrange(l, '(hg wg b) c h w -> b c (hg h) (wg w)', hg=2, wg=2)
 
         pools = []
         for pool_ratio in self.pool_ratios:
              # b,c,h,w
-            tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
-            pool = F.adaptive_avg_pool2d(concated_locs, tgt_hw)
+            # tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
+            # pool = F.adaptive_avg_pool2d(concated_locs, tgt_hw)
+            tgt_h = round(h / pool_ratio)
+            tgt_w = round(w / pool_ratio)
+
+            # 计算池化核大小和步长
+            kernel_size_h = h // tgt_h
+            kernel_size_w = w // tgt_w
+            stride_h = h // tgt_h
+            stride_w = w // tgt_w
+
+            # 保证池化核大小至少为1
+            kernel_size_h = max(1, kernel_size_h)
+            kernel_size_w = max(1, kernel_size_w)
+            stride_h = max(1, stride_h)
+            stride_w = max(1, stride_w)
+
+            # 使用 avg_pool2d 进行池化
+            pool = F.avg_pool2d(
+                concated_locs,
+                (kernel_size_h, kernel_size_w),
+                stride=(stride_h, stride_w),
+            )
             pools.append(rearrange(pool, 'b c h w -> (h w) b c'))
             if self.g_pos is None:
                 pos_emb = self.positional_encoding(pool.shape[0], pool.shape[2], pool.shape[3])
@@ -839,6 +862,8 @@ class MCRM(nn.Module):
     def forward(self, x):
         device = x.device
         b, c, h, w = x.size()
+        h=h.item()
+        w=w.item()
         loc, glb = x.split([4, 1], dim=0)  # 4,c,h,w; 1,c,h,w
 
         patched_glb = rearrange(glb, 'b c (hg h) (wg w) -> (hg wg b) c h w', hg=2, wg=2)
@@ -849,8 +874,29 @@ class MCRM(nn.Module):
 
         pools = []
         for pool_ratio in self.pool_ratios:
-            tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
-            pool = F.adaptive_avg_pool2d(patched_glb, tgt_hw)
+            # tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
+            # pool = F.adaptive_avg_pool2d(patched_glb, tgt_hw)
+            tgt_h = round(h / pool_ratio)
+            tgt_w = round(w / pool_ratio)
+
+            # 计算池化核大小和步长
+            kernel_size_h = h // tgt_h
+            kernel_size_w = w // tgt_w
+            stride_h = h // tgt_h
+            stride_w = w // tgt_w
+
+            # 保证池化核大小至少为1
+            kernel_size_h = max(1, kernel_size_h)
+            kernel_size_w = max(1, kernel_size_w)
+            stride_h = max(1, stride_h)
+            stride_w = max(1, stride_w)
+
+            # 使用 avg_pool2d 进行池化
+            pool = F.avg_pool2d(
+                patched_glb,
+                (kernel_size_h, kernel_size_w),
+                stride=(stride_h, stride_w),
+            )
             pools.append(rearrange(pool, 'nl c h w -> nl c (h w)'))  # nl(4),c,hw
 
         pools = rearrange(torch.cat(pools, 2), "nl c nphw -> nl nphw 1 c")

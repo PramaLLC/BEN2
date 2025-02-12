@@ -1,10 +1,3 @@
-"""
-Description: 
-Author: PeterYoung
-Date: 2025-02-07 10:59:38
-LastEditTime: 2025-02-07 11:40:22
-LastEditors: PeterYoung
-"""
 import BEN2
 import onnx
 import onnxruntime
