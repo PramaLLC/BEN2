@@ -922,53 +922,140 @@ class BEN_Base(nn.Module):
                 m.inplace = True
 
     
+    ####################################以下为源代码##################################################
+    # @torch.inference_mode()
+    # @torch.autocast(device_type="cuda",dtype=torch.float16)
+    # def forward(self, x):
+    #     real_batch = x.size(0)
+    #
+    #     shallow_batch = self.shallow(x)
+    #     glb_batch = rescale_to(x, scale_factor=0.5, interpolation='bilinear')
+    #
+    #
+    #
+    #     final_input = None
+    #     for i in range(real_batch):
+    #         start = i * 4
+    #         end   = (i + 1) * 4
+    #         loc_batch = image2patches(x[i,:,:,:].unsqueeze(dim=0))
+    #         input_ = torch.cat((loc_batch, glb_batch[i,:,:,:].unsqueeze(dim=0)), dim=0)
+    #
+    #
+    #         if final_input == None:
+    #             final_input= input_
+    #         else: final_input = torch.cat((final_input, input_), dim=0)
+    #
+    #     features = self.backbone(final_input)
+    #     outputs = []
+    #
+    #     for i in range(real_batch):
+    #
+    #         start = i * 5
+    #         end   = (i + 1) * 5
+    #
+    #         f4 = features[4][start:end, :, :, :]  # shape: [5, C, H, W]
+    #         f3 = features[3][start:end, :, :, :]
+    #         f2 = features[2][start:end, :, :, :]
+    #         f1 = features[1][start:end, :, :, :]
+    #         f0 = features[0][start:end, :, :, :]
+    #         e5 = self.output5(f4)
+    #         e4 = self.output4(f3)
+    #         e3 = self.output3(f2)
+    #         e2 = self.output2(f1)
+    #         e1 = self.output1(f0)
+    #         loc_e5, glb_e5 = e5.split([4, 1], dim=0)
+    #         e5 = self.multifieldcrossatt(loc_e5, glb_e5)  # (4,128,16,16)
+    #
+    #
+    #         e4, tokenattmap4 = self.dec_blk4(e4 + resize_as(e5, e4))
+    #         e4 = self.conv4(e4)
+    #         e3, tokenattmap3 = self.dec_blk3(e3 + resize_as(e4, e3))
+    #         e3 = self.conv3(e3)
+    #         e2, tokenattmap2 = self.dec_blk2(e2 + resize_as(e3, e2))
+    #         e2 = self.conv2(e2)
+    #         e1, tokenattmap1 = self.dec_blk1(e1 + resize_as(e2, e1))
+    #         e1 = self.conv1(e1)
+    #
+    #         loc_e1, glb_e1 = e1.split([4, 1], dim=0)
+    #
+    #         output1_cat = patches2image(loc_e1)  # (1,128,256,256)
+    #
+    #         # add glb feat in
+    #         output1_cat = output1_cat + resize_as(glb_e1, output1_cat)
+    #         # merge
+    #         final_output = self.insmask_head(output1_cat)  # (1,128,256,256)
+    #         # shallow feature merge
+    #         shallow = shallow_batch[i,:,:,:].unsqueeze(dim=0)
+    #         final_output = final_output + resize_as(shallow, final_output)
+    #         final_output = self.upsample1(rescale_to(final_output))
+    #         final_output = rescale_to(final_output + resize_as(shallow, final_output))
+    #         final_output = self.upsample2(final_output)
+    #         final_output = self.output(final_output)
+    #         mask = final_output.sigmoid()
+    #         outputs.append(mask)
+    #
+    #     return torch.cat(outputs, dim=0)
+
+    ####################################以上为源代码##################################################
 
     @torch.inference_mode()
-    @torch.autocast(device_type="cuda",dtype=torch.float16)
     def forward(self, x):
+        # 自动处理数据类型：GPU用float16，CPU用float32
+        if x.device.type == 'cuda':
+            # GPU模式使用autocast+float16
+            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                return self._forward_impl(x)
+        else:
+            # CPU模式强制使用float32
+            x = x.float()
+            return self._forward_impl(x)
+
+    def _forward_impl(self, x):
         real_batch = x.size(0)
-
         shallow_batch = self.shallow(x)
-        glb_batch = rescale_to(x, scale_factor=0.5, interpolation='bilinear')
 
-
+        # 确保rescale_to在CPU上使用float32
+        if x.device.type != 'cuda':
+            glb_batch = rescale_to(x.float(), scale_factor=0.5, interpolation='bilinear')
+        else:
+            glb_batch = rescale_to(x, scale_factor=0.5, interpolation='bilinear')
 
         final_input = None
         for i in range(real_batch):
             start = i * 4
-            end   = (i + 1) * 4
-            loc_batch = image2patches(x[i,:,:,:].unsqueeze(dim=0))
-            input_ = torch.cat((loc_batch, glb_batch[i,:,:,:].unsqueeze(dim=0)), dim=0)  
-            
-            
-            if final_input == None:
-                final_input= input_
-            else: final_input = torch.cat((final_input, input_), dim=0)
+            end = (i + 1) * 4
+            loc_batch = image2patches(x[i, :, :, :].unsqueeze(dim=0))
+            input_ = torch.cat((loc_batch, glb_batch[i, :, :, :].unsqueeze(dim=0)), dim=0)
+
+            if final_input is None:
+                final_input = input_
+            else:
+                final_input = torch.cat((final_input, input_), dim=0)
 
         features = self.backbone(final_input)
         outputs = []
-        
-        for i in range(real_batch):
 
+        for i in range(real_batch):
             start = i * 5
-            end   = (i + 1) * 5
-            
-            f4 = features[4][start:end, :, :, :]  # shape: [5, C, H, W]
+            end = (i + 1) * 5
+
+            f4 = features[4][start:end, :, :, :]
             f3 = features[3][start:end, :, :, :]
             f2 = features[2][start:end, :, :, :]
             f1 = features[1][start:end, :, :, :]
             f0 = features[0][start:end, :, :, :]
+
             e5 = self.output5(f4)
             e4 = self.output4(f3)
             e3 = self.output3(f2)
             e2 = self.output2(f1)
             e1 = self.output1(f0)
+
             loc_e5, glb_e5 = e5.split([4, 1], dim=0)
-            e5 = self.multifieldcrossatt(loc_e5, glb_e5)  # (4,128,16,16)
+            e5 = self.multifieldcrossatt(loc_e5, glb_e5)
 
-
-            e4, tokenattmap4 = self.dec_blk4(e4 + resize_as(e5, e4)) 
-            e4 = self.conv4(e4) 
+            e4, tokenattmap4 = self.dec_blk4(e4 + resize_as(e5, e4))
+            e4 = self.conv4(e4)
             e3, tokenattmap3 = self.dec_blk3(e3 + resize_as(e4, e3))
             e3 = self.conv3(e3)
             e2, tokenattmap2 = self.dec_blk2(e2 + resize_as(e3, e2))
@@ -977,15 +1064,11 @@ class BEN_Base(nn.Module):
             e1 = self.conv1(e1)
 
             loc_e1, glb_e1 = e1.split([4, 1], dim=0)
-
-            output1_cat = patches2image(loc_e1)  # (1,128,256,256)
-
-            # add glb feat in
+            output1_cat = patches2image(loc_e1)
             output1_cat = output1_cat + resize_as(glb_e1, output1_cat)
-            # merge
-            final_output = self.insmask_head(output1_cat)  # (1,128,256,256)
-            # shallow feature merge
-            shallow = shallow_batch[i,:,:,:].unsqueeze(dim=0)
+
+            final_output = self.insmask_head(output1_cat)
+            shallow = shallow_batch[i, :, :, :].unsqueeze(dim=0)
             final_output = final_output + resize_as(shallow, final_output)
             final_output = self.upsample1(rescale_to(final_output))
             final_output = rescale_to(final_output + resize_as(shallow, final_output))
@@ -995,9 +1078,6 @@ class BEN_Base(nn.Module):
             outputs.append(mask)
 
         return torch.cat(outputs, dim=0)
-
-
-
 
     def loadcheckpoints(self,model_path):
         model_dict = torch.load(model_path, map_location="cpu", weights_only=True)
