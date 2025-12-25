@@ -801,49 +801,6 @@ class PositionEmbeddingSine:
         return torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
 
 
-class PositionEmbeddingSine:
-    def __init__(
-        self, num_pos_feats=64, temperature=10000, normalize=False, scale=None
-    ):
-        super().__init__()
-        self.num_pos_feats = num_pos_feats
-        self.temperature = temperature
-        self.normalize = normalize
-        if scale is not None and normalize is False:
-            raise ValueError("normalize should be True if scale is passed")
-        if scale is None:
-            scale = 2 * math.pi
-        self.scale = scale
-        self.dim_t = torch.arange(0, self.num_pos_feats, dtype=torch.float32)
-
-    def __call__(self, b, h, w):
-        device = self.dim_t.device
-        mask = torch.zeros([b, h, w], dtype=torch.bool, device=device)
-        assert mask is not None
-        not_mask = ~mask
-        y_embed = not_mask.cumsum(dim=1, dtype=torch.float32)
-        x_embed = not_mask.cumsum(dim=2, dtype=torch.float32)
-        if self.normalize:
-            eps = 1e-6
-            y_embed = (y_embed - 0.5) / (y_embed[:, -1:, :] + eps) * self.scale
-            x_embed = (x_embed - 0.5) / (x_embed[:, :, -1:] + eps) * self.scale
-
-        dim_t = self.temperature ** (
-            2 * (self.dim_t.to(device) // 2) / self.num_pos_feats
-        )
-        pos_x = x_embed[:, :, :, None] / dim_t
-        pos_y = y_embed[:, :, :, None] / dim_t
-
-        pos_x = torch.stack(
-            (pos_x[:, :, :, 0::2].sin(), pos_x[:, :, :, 1::2].cos()), dim=4
-        ).flatten(3)
-        pos_y = torch.stack(
-            (pos_y[:, :, :, 0::2].sin(), pos_y[:, :, :, 1::2].cos()), dim=4
-        ).flatten(3)
-
-        return torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
-
-
 class MCLM(nn.Module):
     def __init__(self, d_model, num_heads, pool_ratios=[1, 4, 8]):
         super(MCLM, self).__init__()
