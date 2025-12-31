@@ -15,7 +15,7 @@ BEN2 (Background Erase Network) introduces a novel approach to foreground segmen
 
 ## BEN2 access
 BEN2 was trained on the DIS5k and our 22K proprietary segmentation dataset. Our enhanced model delivers superior performance in hair matting, 4K processing, object segmentation, and edge refinement. Our Base model is open source. To try the full model through our free web demo or integrate BEN2 into your project with our API:
-- 🌐 [backgrounderase.net](https://backgrounderase.net)
+- 🌐 [backgrounderase.com](https://backgrounderase.com)
 
 
 ## Contact us
