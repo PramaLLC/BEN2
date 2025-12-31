@@ -19,8 +19,8 @@ BEN2 was trained on the DIS5k and our 22K proprietary segmentation dataset. Our 
 
 
 ## Contact us
-- For access to our commercial model email us at sales@prama.llc
-- Our website: https://prama.llc/
+- For access to our commercial model email us at sales@backgrounderase.com
+- Our website: https://backgrounderase.com/
 - Follow us on X: https://x.com/PramaResearch/
 
 ## Download weights
